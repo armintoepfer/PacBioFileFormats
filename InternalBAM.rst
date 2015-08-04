@@ -139,11 +139,11 @@ time, changing at an interval on the order of 10 to 100 seconds (i.e.,
 slowly!).  We tally the number of pulses in each interval ("block")
 and the baseline sigma for each channel during that block, as follows:
 
-- "bs” tag = BaselineSigma =
+- "bs" tag = BaselineSigma =
   { A_0, C_0, G_0, T_0, A_1, C_1, G_1, T_1, ... } (as `float32[]` / `B,f`)
    where subscript denotes block number.
 
-- “pb” tag = PulseBlockSize
+- "pb" tag = PulseBlockSize
   = number of pulses in each block (`uint32[]`, `B,I`)
 
 Thus, for example, the first `pb[0]` pulses have baseline sigma

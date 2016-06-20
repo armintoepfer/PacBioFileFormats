@@ -47,17 +47,24 @@ held true for RS bas/pls .h5 files).
 Pulse features
 ==============
 
+Background: A spike in the trace can be identified as a pulse and
+a pulse can be called as a base. Thus, the number of pulse calls is at 
+least equal the number of base calls, as they are also pulses.
+As some pulses do not qualify as bases, the number of pulses is
+possibly greater than the number of bases.
 
-The pulse BAM extends the vanilla PacBio BAM format with the following
-per-read tags:
-
+The pulse BAM extends the vanilla PacBio BAM format with additional
+per-read tags. These new pulse tags are of equal length, 
+one entry per pulse:
 
     +---------------------+---------+--------+--------------------+--------------------------------+
     | Feature             | Tag name| Type   |      Example       | Comment                        |
     +=====================+=========+========+====================+================================+
     | Pulse call          | pc      | Z      |        GaAT        | Lowercase used to indicate a   |
     |                     |         |        |                    | pulsecall that was "squashed"  |
-    |                     |         |        |                    | by P2B                         |
+    |                     |         |        |                    | by P2B, uppercases are         |
+    |                     |         |        |                    | the respective                 |
+    |                     |         |        |                    | base calls from the SEQ field  |
     +---------------------+---------+--------+--------------------+--------------------------------+
     | LabelQV             | pq      | Z      |    20,20,12,20     | TODO                           |
     +---------------------+---------+--------+--------------------+--------------------------------+
@@ -68,9 +75,10 @@ per-read tags:
     +---------------------+---------+--------+--------------------+--------------------------------+
     | Pulse mean signal   | pa      | B,S    |      2,3,2,4       | Only includes signal measure   |
     | (pkmean)            |         |        |                    | for the "called" channel       |
+    |                     |         |        |                    | *Units:* photoelectron         |
     +---------------------+---------+--------+--------------------+--------------------------------+
     | Pulse mid signal    | pm      | B,S    |      3,3,4,3       | Mean, omitting edge frames     |
-    | (pkmid)             |         |        |                    |                                |
+    | (pkmid)             |         |        |                    | *Units:* photoelectron         |
     +---------------------+---------+--------+--------------------+--------------------------------+
     | Pre-pulse frames    | pd      | B,S    |      8,5,5,8       | Pre-pulse frames, truncated to |
     |                     |         |        |                    | max(uint16).                   |
@@ -116,3 +124,7 @@ Unresolved questions
 
 - Where will baseline information be stored?  Current plan is to store
   it in ``sts.h5`` file (which needs a spec of its own).
+- The pkmid/pkmean values are stored in photoelections, which means we need 
+  the gain in order to compute the values in counts.  This has internal value 
+  when back-converting internal BAMs to pls.h5 files, which uses counts to 
+  represent pk values.

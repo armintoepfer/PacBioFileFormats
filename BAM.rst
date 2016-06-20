@@ -5,13 +5,6 @@ BAM format specification for PacBio
 .. moduleauthor:: David Alexander, Marcus Kinsella, Derek Barnett,
                   Armin Toepfer, Brett Bowman
 
-
-.. warning::
-   This specification, while close to being final, is still subject to
-   change.  We will provide no support for BAM files until the 3.0
-   spec is finalized.
-
-
 The BAM format is a binary, compressed, record-oriented container
 format for raw or aligned sequence reads.  The associated SAM format
 is a text representation of the same data.  The `specifications for
@@ -30,8 +23,8 @@ the *pbcore* Python library.
 Version
 =======
 
-The PacBio BAM specification version described here is 3.0.1. PacBio
-BAM files adhering to this spec contain the tag ``pb:3.0.1`` in the
+The PacBio BAM specification version described here is 3.0.4. PacBio
+BAM files adhering to this spec contain the tag ``pb:3.0.4`` in the
 ``@HD`` header.
 
 
@@ -43,7 +36,7 @@ and intervals on the reference.
 
 PacBio also uses a 0-based coordinate system to refer to positions and
 intervals within sequence reads.  Positions in PacBio reads are
-reckoned from the first polymerase read base (as base 0), *not* the
+reckoned from the first ZMW read base (as base 0), *not* the
 first base in the HQ region.
 
 Perhaps confusingly, the text SAM format uses 1-based coordinate
@@ -61,7 +54,7 @@ intervals are closed.
 ==========================================
 
 A sequence read presented to an aligner is termed a *query*; typically
-this query will be a subsequence of an entire PacBio polymerase
+this query will be a subsequence of an entire PacBio ZMW
 read---most commonly, it will be a *subread*, which is basecalls from
 a single pass of the insert DNA molecule.
 
@@ -71,13 +64,13 @@ to the reference genome, and that subsequence is referred to as the
 stored in the aligned BAM, but the CIGAR field indicates that some
 bases at either end are excluded from the alignment.
 
-Abstractly, we denote the extent of the *query* in polymerase read as
+Abstractly, we denote the extent of the *query* in ZMW read as
 `[qStart, qEnd)` and the extent of the aligned subinterval as `[aStart, aEnd)`
 The following graphic illustrates these intervals::
 
               qStart                         qEnd
     0         |  aStart                aEnd  |
-    [--...----*--*---------------------*-----*-----...------)  < "polymerase read" coord. system
+    [--...----*--*---------------------*-----*-----...------)  < "ZMW read" coord. system
               ~~~----------------------~~~~~~                  <  query; "-" = aligning subseq.
     [--...-------*---------...---------*-----------...------)  < "ref." / "target" coord. system
     0            tStart                tEnd
@@ -85,7 +78,7 @@ The following graphic illustrates these intervals::
 
 In our BAM files, the qStart, qEnd are contained in the ``qs`` and
 ``qe`` tags, (and reflected in the ``QNAME``); the bounds of the
-*aligned query* in the polymerase read can be determined by adjusting
+*aligned query* in the ZMW read can be determined by adjusting
 ``qs`` and ``qe`` by the number of soft-clipped bases at the ends of
 the alignment (as found in the CIGAR).
 
@@ -105,7 +98,7 @@ and subreads is in the following format::
    {movieName}/{holeNumber}/{qStart}_{qEnd}
 
 where ``[qStart, qEnd)`` is the 0-based coordinate interval
-representing the span of the *query* in the polymerase read, as above.
+representing the span of the *query* in the ZMW read, as above.
 
 For CCS reads, the ``QNAME`` convention is::
 
@@ -130,7 +123,7 @@ use a ``suffix.bam`` filename convention:
   +------------------------------------+------------------------------+
   | Data type                          | Filename template            |
   +====================================+==============================+
-  | Polymerase reads from movie        | *movieName*.polymerase.bam   |
+  | ZMW reads from movie               | *movieName*.zmws.bam         |
   +------------------------------------+------------------------------+
   | Analysis-ready subreads :sup:`1`   | *movieName*.subreads.bam     |
   |  from movie                        |                              |
@@ -208,6 +201,10 @@ SAM/BAM spec, we encode special information as follows.
   ``PL`` tag ("platform"):
       contains ``"PACBIO"``
 
+  ``PM`` tag ("platform model")
+      contains ``"ASTRO"``, ``"RS"``, or ``"SEQUEL"``, reflecting the
+      PacBio instrument series
+
   ``PU`` tag ("platform unit"):
       contains the PacBio movie name.
 
@@ -223,7 +220,7 @@ SAM/BAM spec, we encode special information as follows.
       +-------------------+----------------------------------------+----------------+
       | Key               | Value spec                             | Value example  |
       +===================+========================================+================+
-      | READTYPE          | One of POLYMERASE, HQREGION,           | SUBREAD        |
+      | READTYPE          | One of ZMW, HQREGION,                  | SUBREAD        |
       |                   | SUBREAD, CCS, SCRAP, or UNKNOWN        |                |
       +-------------------+----------------------------------------+----------------+
       | BINDINGKIT        | Binding kit part number                | 100236500      |
@@ -315,9 +312,9 @@ Use of read tags for per-read information
   +-----------+------------+------------------------------------------------------------------+
   | **Tag**   | **Type**   | **Description**                                                  |
   +===========+============+==================================================================+
-  | qs        | i          | 0-based start of query in the polymerase read (absent in CCS)    |
+  | qs        | i          | 0-based start of query in the ZMW read (absent in CCS)           |
   +-----------+------------+------------------------------------------------------------------+
-  | qe        | i          | 0-based end of query in the polymerase read (absent in CCS)      |
+  | qe        | i          | 0-based end of query in the ZMW read (absent in CCS)             |
   +-----------+------------+------------------------------------------------------------------+
   | zm        | i          | ZMW hole number                                                  |
   +-----------+------------+------------------------------------------------------------------+
@@ -374,27 +371,38 @@ Notes:
 
 
 
-Use of sc read tag to annotate scraps
-=====================================
+How to annotate scrap reads
+===========================
 
 Reads that belong to a read group with READTYPE=SCRAP have to be annotated
-with the following tag:
+in a hierarchical fashion:
+
+1) Classification with tag *sz* occurs on a per ZMW level, distinguishing 
+   between spike-in controls, sentinels of the basecaller, malformed ZMWs, 
+   and user-defined templates.
+2) A region-wise annotation with tag *sc* to label adapters, barcodes, 
+   low-quality regions, and filtered subreads.
 
   +-----------+---------------+-----------------------------------------+
   | **Tag**   | **Type**      |**Description**                          |
   +===========+===============+=========================================+
-  | sc        | A             | Scrap type annotation, one of           |
+  | sz        | A             | ZMW classification annotation, one of   |
+  |           |               | N:=Normal, C:=Control, M:=Malformed,    |
+  |           |               | or S:=Sentinel :sup:`1`                 |
+  +-----------+---------------+-----------------------------------------+
+  | sc        | A             | Scrap region-type annotation, one of    |
   |           |               | A:=Adapter, B:=Barcode, L:=LQRegion,    |
-  |           |               | or F:=Filtered :sup:`1`                 |
+  |           |               | or F:=Filtered :sup:`2`                 |
   +-----------+---------------+-----------------------------------------+
 
   :sup:`1`
+    reads in the subreads/hqregions/zmws.bam file are implicitly
+    marked as Normal, as they stem from user-defined templates.
+
+  :sup:`2`
     sc tags 'A', 'B', and 'L' denote specific classes of non-subread data,
-    and therefore should only be in records with no subread-specific
-    information like cx, bc, or bq tags.  The 'F' tag, in contrast, should
-    be reserved for subreads that are undesirable for some reason, for
-    example being artifactual or representing a 1bp insert in 
-    adapter-dimer.
+    whereas the 'F' tag is reserved for subreads that are undesirable for
+    downstream analysis, e.g., being artifactual or too short.
 
 QUAL
 ====
@@ -456,7 +464,7 @@ The ``ADAPTER_*`` and ``BARCODE_*`` flags reflect whether the
 subread is flanked by adapters or barcodes at the ends.
 
 This tag is mandatory for subread records, but will be absent from
-non-subread records (scraps, polymerase read, CCS read, etc.)
+non-subread records (scraps, ZMW read, CCS read, etc.)
 
 
   +-----------+---------------+----------------------------------------------------+
@@ -474,7 +482,7 @@ barcode call and a score representing the confidence of that call.
 The actual data used to inform the barcode calls---the barcode
 sequences and associated pulse features---will be retained in the
 associated ``scraps.bam`` file, so that ``bam2bam`` can be used at a
-later time to reconstitute the full-length polymerase reads in order,
+later time to reconstitute the full-length ZMW reads in order,
 for example, to repeat barcode calling with different options.
 
 
@@ -534,6 +542,19 @@ Examples (subreads)
 | orientation              |           |          |                     |
 +--------------------------+-----------+----------+---------------------+
 
+
+
+Alignment: the contract for a mapper
+====================================
+
+An aligner is expected to accept BAM input and produce aligned BAM
+output, where each aligned BAM record in the output preserves intact
+all tags present in the original record.  The aligner should not
+attempt to orient or complement any of the tags.
+
+(Note that this contrasts with the handling of `SEQ` and `QUAL`, which
+are mandated by the BAM/SAM specification to be (respectively)
+reverse-complemented, and reversed, for reverse strand alignments.)
 
 
 Alignment: soft-clipping
